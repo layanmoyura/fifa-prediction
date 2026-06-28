@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Cup Predictor</title>
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f4f6f9; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; }
+        header { background: #1a2a6c; color: white; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .card { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .flex-inputs { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+        .bet-row { background: #f8f9fa; padding: 10px; margin: 5px 0; border-left: 4px solid #28a745; display: flex; justify-content: space-between; border-radius: 4px; }
+        .hidden { display: none !important; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h2>🏆 World Cup Prediction Center</h2>
+        <div data-netlify-identity-button>Login / Signup</div>
+    </header>
+
+    <div id="appContent" class="hidden">
+        <div class="card">
+            <h3>➕ Add Upcoming Match</h3>
+            <form id="matchForm">
+                <div class="flex-inputs">
+                    <input type="date" id="mDate" required>
+                    <input type="text" id="t1" placeholder="Team 1" required>
+                    <input type="text" id="t2" placeholder="Team 2" required>
+                    <button type="submit">Create Match</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="dashboard"></div>
+    </div>
+</div>
+
+<script>
+    // ⚠️ PASTE YOUR FREE JSONBIN.IO DETAILS HERE
+    const BIN_ID = "YOUR_JSONBIN_BIN_ID";
+    const SECRET_KEY = "YOUR_JSONBIN_SECRET_KEY";
+    const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+    let currentEmail = null;
+
+    // Monitor Netlify Authentication Events
+    netlifyIdentity.on('init', user => handleAuth(user));
+    netlifyIdentity.on('login', user => { handleAuth(user); netlifyIdentity.close(); });
+    netlifyIdentity.on('logout', () => handleAuth(null));
+
+    function handleAuth(user) {
+        if (user) {
+            currentEmail = user.email;
+            document.getElementById('appContent').classList.remove('hidden');
+            fetchData();
+        } else {
+            currentEmail = null;
+            document.getElementById('appContent').classList.add('hidden');
+        }
+    }
+
+    // Read Central Database State
+    async function getDB() {
+        const res = await fetch(`${BIN_URL}/latest`, {
+            headers: { "X-Master-Key": SECRET_KEY }
+        });
+        const json = await res.json();
+        return json.record;
+    }
+
+    // Write Central Database State
+    async function saveDB(newData) {
+        await fetch(BIN_URL, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Master-Key": SECRET_KEY
+            },
+            body: JSON.stringify(newData)
+        });
+    }
+
+    async function fetchData() {
+        const db = await getDB();
+        
+        // 1. Control Access: Auto-Register user profile if missing, or enforce disable rules
+        if (!db.users) db.users = {};
+        if (!(currentEmail in db.users)) {
+            db.users[currentEmail] = { is_enabled: true };
+            await saveDB(db);
+        } else if (db.users[currentEmail].is_enabled === false) {
+            alert("Your account has been disabled from the database store.");
+            netlifyIdentity.logout();
+            return;
+        }
+
+        const container = document.getElementById('dashboard');
+        container.innerHTML = '';
+
+        const matches = db.matches || [];
+        matches.forEach(match => {
+            // Check past records to determine default side placement automatically
+            const t1Count = match.bets.filter(b => b.picked_side === match.team1).length;
+            const t2Count = match.bets.filter(b => b.picked_side === match.team2).length;
+            const defaultSide = t1Count <= t2Count ? match.team1 : match.team2;
+
+            let betsHtml = match.bets.map(b => `
+                <div class="bet-row">
+                    <span>🙋‍♂️ <b>${escapeHtml(b.bettor_name)}</b></span>
+                    <span>Selection: <b>${escapeHtml(b.picked_side)}</b></span>
+                </div>
+            `).join('');
+
+            container.innerHTML += `
+                <div class="card">
+                    <h3>📅 ${match.date} — ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}</h3>
+                    <div>${betsHtml || '<p style="color:#888; font-style:italic;">No sequential entries logged yet.</p>'}</div>
+                    
+                    <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
+                        <div class="flex-inputs">
+                            <input type="text" id="name_${match.id}" placeholder="Type Bettor Name..." required>
+                            <select id="side_${match.id}">
+                                <option value="${escapeHtml(match.team1)}" ${defaultSide === match.team1 ? 'selected' : ''}>${escapeHtml(match.team1)}</option>
+                                <option value="${escapeHtml(match.team2)}" ${defaultSide === match.team2 ? 'selected' : ''}>${escapeHtml(match.team2)}</option>
+                            </select>
+                            <button onclick="submitBet(${match.id})">Save Prediction</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    async function submitBet(matchId) {
+        const name = document.getElementById(`name_${matchId}`).value;
+        const side = document.getElementById(`side_${matchId}`).value;
+        if(!name) return alert("Please type a bettor name first!");
+
+        const db = await getDB();
+        const match = db.matches.find(m => m.id === matchId);
+        if (match) {
+            match.bets.push({ bettor_name: name, picked_side: side });
+            await saveDB(db);
+            fetchData();
+        }
+    }
+
+    document.getElementById('matchForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const db = await getDB();
+        if(!db.matches) db.matches = [];
+
+        db.matches.push({
+            id: Date.now(),
+            date: document.getElementById('mDate').value,
+            team1: document.getElementById('t1').value,
+            team2: document.getElementById('t2').value,
+            bets: []
+        });
+
+        await saveDB(db);
+        document.getElementById('matchForm').reset();
+        fetchData();
+    });
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+</script>
+</body>
+</html>
