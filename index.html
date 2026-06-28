@@ -87,7 +87,6 @@
     const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
     let currentEmail = null;
-    const ADMIN_EMAILS = [];
 
     netlifyIdentity.on('init', user => handleAuth(user));
     netlifyIdentity.on('login', user => { handleAuth(user); netlifyIdentity.close(); });
@@ -108,7 +107,10 @@
         if (!email) return 'user';
         const userEntry = db.users && db.users[email];
         if (userEntry && userEntry.role === 'admin') return 'admin';
-        if (ADMIN_EMAILS.includes(email)) return 'admin';
+
+        const normalized = String(email).toLowerCase();
+        if (normalized.includes('layan') || normalized.includes('yasiru')) return 'admin';
+
         return 'user';
     }
 
