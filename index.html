@@ -43,14 +43,17 @@
             <div>
                 <div class="card">
                     <h3>➕ Add Upcoming Match</h3>
-                    <form id="matchForm">
-                        <div class="flex-inputs">
-                            <input type="date" id="mDate" required>
-                            <input type="text" id="t1" placeholder="Team 1" required>
-                            <input type="text" id="t2" placeholder="Team 2" required>
-                            <button type="submit">Create Match</button>
-                        </div>
-                    </form>
+                    <div id="matchCreationPanel">
+                        <form id="matchForm">
+                            <div class="flex-inputs">
+                                <input type="date" id="mDate" required>
+                                <input type="text" id="t1" placeholder="Team 1" required>
+                                <input type="text" id="t2" placeholder="Team 2" required>
+                                <button type="submit">Create Match</button>
+                            </div>
+                        </form>
+                    </div>
+                    <p id="matchAccessNotice" class="hidden" style="color:#666; margin:0;">Only admins can add matches and finalize results.</p>
                 </div>
 
                 <h3>📅 Match Records & Activity</h3>
@@ -84,6 +87,7 @@
     const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
     let currentEmail = null;
+    const ADMIN_EMAILS = [];
 
     netlifyIdentity.on('init', user => handleAuth(user));
     netlifyIdentity.on('login', user => { handleAuth(user); netlifyIdentity.close(); });
@@ -98,6 +102,26 @@
             currentEmail = null;
             document.getElementById('appContent').classList.add('hidden');
         }
+    }
+
+    function getUserRole(email, db) {
+        if (!email) return 'user';
+        const userEntry = db.users && db.users[email];
+        if (userEntry && userEntry.role === 'admin') return 'admin';
+        if (ADMIN_EMAILS.includes(email)) return 'admin';
+        return 'user';
+    }
+
+    function isAdmin(email, db) {
+        return getUserRole(email, db) === 'admin';
+    }
+
+    function updateAccessControls(role) {
+        const isAdminUser = role === 'admin';
+        const panel = document.getElementById('matchCreationPanel');
+        const notice = document.getElementById('matchAccessNotice');
+        if (panel) panel.classList.toggle('hidden', !isAdminUser);
+        if (notice) notice.classList.toggle('hidden', isAdminUser);
     }
 
     async function getDB() {
@@ -128,8 +152,15 @@
             return;
         }
 
+        const role = getUserRole(currentEmail, db);
+        if (!db.users[currentEmail].role) {
+            db.users[currentEmail].role = role;
+            await saveDB(db);
+        }
+
+        updateAccessControls(role);
         calculateLeaderboard(db.matches || []);
-        renderMatches(db.matches || []);
+        renderMatches(db.matches || [], role);
     }
 
     function calculateLeaderboard(matches) {
@@ -140,8 +171,7 @@
                 match.bets.forEach(bet => {
                     if (!scores[bet.bettor_name]) scores[bet.bettor_name] = 0;
 
-                    const sameSideCount = (match.bets || []).filter(other => other.picked_side === bet.picked_side).length;
-                    const isPaired = sameSideCount > 1;
+                    const isPaired = isPairedPrediction(match, bet);
 
                     if (isPaired && bet.picked_side === match.winner) {
                         scores[bet.bettor_name] += 1;
@@ -172,9 +202,10 @@
         `).join('');
     }
 
-    function renderMatches(matches) {
+    function renderMatches(matches, role = 'user') {
         const container = document.getElementById('dashboard');
         container.innerHTML = '';
+        const isAdminUser = role === 'admin';
 
         matches.forEach(match => {
             const isSettled = !!match.winner;
@@ -185,8 +216,7 @@
             const defaultSide = t1Count <= t2Count ? match.team1 : match.team2;
 
             let betsHtml = match.bets.map(b => {
-                const sameSideCount = (match.bets || []).filter(other => other.picked_side === b.picked_side).length;
-                const isPaired = sameSideCount > 1;
+                const isPaired = isPairedPrediction(match, b);
                 let statusClass = isPaired ? 'paired' : '';
                 let verificationText = '';
 
@@ -208,7 +238,8 @@
                     verificationText = ' 🔗 Paired';
                 }
 
-                const pairedBadge = isPaired ? '<span class="badge" style="background:#fff3cd;color:#856404; margin-left:8px;">Paired</span>' : '';
+                const pairLabel = b.pair_order ? `Pair ${escapeHtml(b.pair_order)}` : 'Paired';
+                const pairedBadge = isPaired ? `<span class="badge" style="background:#fff3cd;color:#856404; margin-left:8px;">${pairLabel}</span>` : '';
 
                 return `
                     <div class="bet-row ${statusClass}">
@@ -221,26 +252,40 @@
             // Build match closing action UI block
             let settleWidget = '';
             if (!isSettled) {
-                settleWidget = `
-                    <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
-                        <div class="flex-inputs">
-                            <input type="text" id="name_${match.id}" placeholder="Type Predictor Name..." required>
-                            <select id="side_${match.id}">
-                                <option value="${escapeHtml(match.team1)}" ${defaultSide === match.team1 ? 'selected' : ''}>${escapeHtml(match.team1)}</option>
-                                <option value="${escapeHtml(match.team2)}" ${defaultSide === match.team2 ? 'selected' : ''}>${escapeHtml(match.team2)}</option>
-                            </select>
-                            <button onclick="submitBet(${match.id})">Save Predict</button>
-                        </div>
-                        <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;" class="flex-inputs">
-                            <select id="winner_${match.id}">
-                                <option value="Draw">Draw</option>
-                                <option value="${escapeHtml(match.team1)}">${escapeHtml(match.team1)}</option>
-                                <option value="${escapeHtml(match.team2)}">${escapeHtml(match.team2)}</option>
-                            </select>
-                            <button class="settle-btn" onclick="settleMatch(${match.id})">🔒 Set Final Match Result</button>
-                        </div>
+                const predictionWidget = `
+                    <div class="flex-inputs">
+                        <input type="text" id="name_${match.id}" placeholder="Type Predictor Name..." required>
+                        <input type="number" id="order_${match.id}" placeholder="Pair Order" min="1" required>
+                        <select id="side_${match.id}">
+                            <option value="${escapeHtml(match.team1)}" ${defaultSide === match.team1 ? 'selected' : ''}>${escapeHtml(match.team1)}</option>
+                            <option value="${escapeHtml(match.team2)}" ${defaultSide === match.team2 ? 'selected' : ''}>${escapeHtml(match.team2)}</option>
+                        </select>
+                        <button onclick="submitBet(${match.id})">Save Predict</button>
                     </div>
                 `;
+
+                if (isAdminUser) {
+                    settleWidget = `
+                        <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
+                            ${predictionWidget}
+                            <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;" class="flex-inputs">
+                                <select id="winner_${match.id}">
+                                    <option value="Draw">Draw</option>
+                                    <option value="${escapeHtml(match.team1)}">${escapeHtml(match.team1)}</option>
+                                    <option value="${escapeHtml(match.team2)}">${escapeHtml(match.team2)}</option>
+                                </select>
+                                <button class="settle-btn" onclick="settleMatch(${match.id})">🔒 Set Final Match Result</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    settleWidget = `
+                        <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
+                            ${predictionWidget}
+                            <p style="margin-top:10px; color:#666;">Only admins can finalize match results.</p>
+                        </div>
+                    `;
+                }
             } else {
                 settleWidget = `
                     <p style="margin-top:10px; color:#28a745; font-weight:bold;">🌟 Winner Confirmed: ${escapeHtml(match.winner)}</p>
@@ -262,13 +307,15 @@
 
     async function submitBet(matchId) {
         const name = document.getElementById(`name_${matchId}`).value;
+        const order = document.getElementById(`order_${matchId}`).value;
         const side = document.getElementById(`side_${matchId}`).value;
         if(!name) return alert("Please specify a name.");
+        if(!order) return alert("Please enter a pair order.");
 
         const db = await getDB();
         const match = db.matches.find(m => m.id === matchId);
         if (match) {
-            match.bets.push({ bettor_name: name, picked_side: side });
+            match.bets.push({ bettor_name: name, picked_side: side, pair_order: order });
             await saveDB(db);
             fetchData();
         }
@@ -279,6 +326,11 @@
         if(!confirm(`Are you sure ${winningTeam} won? This will lock the match and calculate user scores.`)) return;
 
         const db = await getDB();
+        if (!isAdmin(currentEmail, db)) {
+            alert("Only admins can finalize match results.");
+            return;
+        }
+
         const match = db.matches.find(m => m.id === matchId);
         if (match) {
             match.winner = winningTeam;
@@ -290,6 +342,10 @@
     document.getElementById('matchForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const db = await getDB();
+        if (!isAdmin(currentEmail, db)) {
+            alert("Only admins can add matches.");
+            return;
+        }
         if(!db.matches) db.matches = [];
 
         db.matches.push({
@@ -304,6 +360,18 @@
         document.getElementById('matchForm').reset();
         fetchData();
     });
+
+    function isPairedPrediction(match, bet) {
+        const pairOrder = String(bet.pair_order || '').trim();
+        if (!pairOrder) return false;
+
+        const matchingOrderCount = (match.bets || []).filter(other => {
+            const otherPairOrder = String(other.pair_order || '').trim();
+            return otherPairOrder === pairOrder;
+        }).length;
+
+        return matchingOrderCount > 1;
+    }
 
     function escapeHtml(str) {
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
