@@ -26,6 +26,9 @@
         .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
         .badge.upcoming { background: #ffeeba; color: #856404; }
         .badge.completed { background: #d4edda; color: #155724; }
+        .bet-row.paired { border-left-color: #ff9800; background: #fff8e1; }
+        .bet-row.paired.correct { border-left-color: #28a745; background: #e8f5e9; }
+        .bet-row.draw { border-left-color: #6c757d; background: #f8f9fa; }
     </style>
 </head>
 <body>
@@ -57,11 +60,11 @@
             <div>
                 <div class="card">
                     <h3>🥇 Leaderboard</h3>
-                    <p style="font-size: 0.9em; color: #666;">Ranked by total correct predictions</p>
+                    <p style="font-size: 0.9em; color: #666;">Ranked by total correct predicts</p>
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th>Bettor Name</th>
+                                <th>Predictor Name</th>
                                 <th>Correct</th>
                             </tr>
                         </thead>
@@ -76,8 +79,8 @@
 
 <script>
     // ⚠️ ASSIGN YOUR JSONBIN.IO KEYS HERE
-    const BIN_ID = "YOUR_JSONBIN_BIN_ID";
-    const SECRET_KEY = "YOUR_JSONBIN_SECRET_KEY";
+    const BIN_ID = "6a40cae0da38895dfe0a770e";
+    const SECRET_KEY = "$2a$10$wRbjHXSOUsO.HCRv8ihLh.WNsOx41rlOLQTeIs22leYMwWJHHgcDO";
     const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
     let currentEmail = null;
@@ -133,10 +136,14 @@
         let scores = {}; // Structure: { "Bettor Name": total_correct }
 
         matches.forEach(match => {
-            if (match.winner) { // Only score matches that are completed
+            if (match.winner && match.winner !== 'Draw') { // Only score non-draw matches that are completed
                 match.bets.forEach(bet => {
                     if (!scores[bet.bettor_name]) scores[bet.bettor_name] = 0;
-                    if (bet.picked_side === match.winner) {
+
+                    const sameSideCount = (match.bets || []).filter(other => other.picked_side === bet.picked_side).length;
+                    const isPaired = sameSideCount > 1;
+
+                    if (isPaired && bet.picked_side === match.winner) {
                         scores[bet.bettor_name] += 1;
                     }
                 });
@@ -178,21 +185,35 @@
             const defaultSide = t1Count <= t2Count ? match.team1 : match.team2;
 
             let betsHtml = match.bets.map(b => {
-                let statusClass = '';
+                const sameSideCount = (match.bets || []).filter(other => other.picked_side === b.picked_side).length;
+                const isPaired = sameSideCount > 1;
+                let statusClass = isPaired ? 'paired' : '';
                 let verificationText = '';
+
                 if (isSettled) {
-                    if (b.picked_side === match.winner) {
-                        statusClass = 'correct';
-                        verificationText = ' ✅ Correct';
+                    if (match.winner === 'Draw') {
+                        statusClass = 'draw';
+                        verificationText = ' ↔ Draw';
+                    } else if (isPaired && b.picked_side === match.winner) {
+                        statusClass = 'paired correct';
+                        verificationText = ' ✅ Correct + Paired';
+                    } else if (b.picked_side === match.winner) {
+                        statusClass = 'incorrect';
+                        verificationText = ' ⚠️ Correct team, but not paired';
                     } else {
                         statusClass = 'incorrect';
                         verificationText = ' ❌ Incorrect';
                     }
+                } else if (isPaired) {
+                    verificationText = ' 🔗 Paired';
                 }
+
+                const pairedBadge = isPaired ? '<span class="badge" style="background:#fff3cd;color:#856404; margin-left:8px;">Paired</span>' : '';
+
                 return `
                     <div class="bet-row ${statusClass}">
-                        <span>🙋‍♂️ <b>${escapeHtml(b.bettor_name)}</b></span>
-                        <span>Picked: <b>${escapeHtml(b.picked_side)}</b>${verificationText}</span>
+                        <span>🙋‍♂️ <b>${escapeHtml(b.bettor_name)}</b>${pairedBadge}</span>
+                        <span>Predict: <b>${escapeHtml(b.picked_side)}</b>${verificationText}</span>
                     </div>
                 `;
             }).join('');
@@ -203,19 +224,20 @@
                 settleWidget = `
                     <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
                         <div class="flex-inputs">
-                            <input type="text" id="name_${match.id}" placeholder="Type Bettor Name..." required>
+                            <input type="text" id="name_${match.id}" placeholder="Type Predictor Name..." required>
                             <select id="side_${match.id}">
                                 <option value="${escapeHtml(match.team1)}" ${defaultSide === match.team1 ? 'selected' : ''}>${escapeHtml(match.team1)}</option>
                                 <option value="${escapeHtml(match.team2)}" ${defaultSide === match.team2 ? 'selected' : ''}>${escapeHtml(match.team2)}</option>
                             </select>
-                            <button onclick="submitBet(${match.id})">Save Prediction</button>
+                            <button onclick="submitBet(${match.id})">Save Predict</button>
                         </div>
                         <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;" class="flex-inputs">
                             <select id="winner_${match.id}">
+                                <option value="Draw">Draw</option>
                                 <option value="${escapeHtml(match.team1)}">${escapeHtml(match.team1)}</option>
                                 <option value="${escapeHtml(match.team2)}">${escapeHtml(match.team2)}</option>
                             </select>
-                            <button class="settle-btn" onclick="settleMatch(${match.id})">🔒 Set Final Match Winner</button>
+                            <button class="settle-btn" onclick="settleMatch(${match.id})">🔒 Set Final Match Result</button>
                         </div>
                     </div>
                 `;
@@ -231,7 +253,7 @@
                         <h3>📅 ${match.date} — ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}</h3>
                         <span class="badge ${isSettled ? 'completed' : 'upcoming'}">${isSettled ? 'Finished' : 'Upcoming'}</span>
                     </div>
-                    <div>${betsHtml || '<p style="color:#888; font-style:italic;">No logged predictions yet.</p>'}</div>
+                    <div>${betsHtml || '<p style="color:#888; font-style:italic;">No logged predicts yet.</p>'}</div>
                     ${settleWidget}
                 </div>
             `;
