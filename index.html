@@ -175,9 +175,15 @@
 
                     const isPaired = isPairedPrediction(match, bet);
 
-                    if (isPaired && bet.picked_side === match.winner) {
-                        scores[bet.bettor_name] += 1;
+                    // New behavior: paired correct => +1, paired incorrect => -1
+                    if (isPaired) {
+                        if (bet.picked_side === match.winner) {
+                            scores[bet.bettor_name] += 1;
+                        } else {
+                            scores[bet.bettor_name] -= 1;
+                        }
                     }
+                    // Unpaired predictions do not affect score (kept as before)
                 });
             } else {
                 // Initialize names in leaderboard even if they haven't won points yet
@@ -324,7 +330,7 @@
     }
 
     async function settleMatch(matchId) {
-        const winningTeam = document.getElementById(`winner_${matchId}`).value;
+        const winningTeam = document.getElementById(`winner_${match.id}`).value;
         if(!confirm(`Are you sure ${winningTeam} won? This will lock the match and calculate user scores.`)) return;
 
         const db = await getDB();
