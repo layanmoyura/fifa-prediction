@@ -6,29 +6,132 @@
     <title>World Cup Predictor with History</title>
     <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background: #f4f6f9; color: #333; }
-        .container { max-width: 900px; margin: 0 auto; }
-        header { background: #1a2a6c; color: white; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { 
+            background: linear-gradient(135deg, #1a2a6c 0%, #0f1c3f 100%);
+            color: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+        header h2 { font-size: 2em; }
         .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 20px; }
         @media(max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card { 
+            background: white; 
+            padding: 25px; 
+            margin-bottom: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15); }
         .flex-inputs { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-        .bet-row { background: #f8f9fa; padding: 10px; margin: 5px 0; border-left: 4px solid #007bff; display: flex; justify-content: space-between; border-radius: 4px; }
-        .bet-row.correct { border-left-color: #28a745; background: #e8f5e9; }
-        .bet-row.incorrect { border-left-color: #dc3545; background: #ffebee; }
+        .bet-row { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            margin: 8px 0; 
+            border-left: 5px solid #007bff; 
+            display: flex; 
+            justify-content: space-between; 
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            align-items: center;
+        }
+        .bet-row:hover { background: #f0f1f3; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+        .bet-row.correct { border-left-color: #28a745; background: linear-gradient(to right, #e8f5e9, white); }
+        .bet-row.incorrect { border-left-color: #dc3545; background: linear-gradient(to right, #ffebee, white); }
+        .bet-row.draw { border-left-color: #6c757d; background: linear-gradient(to right, #f0f0f0, white); }
+        .bet-row.paired { border-left-color: #ff9800; background: linear-gradient(to right, #fff8e1, white); }
+        .bet-row.paired.correct { border-left-color: #28a745; background: linear-gradient(to right, #e8f5e9, white); }
         .hidden { display: none !important; }
-        button { background: #007bff; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; }
-        button.settle-btn { background: #ffc107; color: #212529; }
-        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .leaderboard-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .leaderboard-table th, .leaderboard-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        .leaderboard-table th { background: #f1f3f5; }
-        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
-        .badge.upcoming { background: #ffeeba; color: #856404; }
-        .badge.completed { background: #d4edda; color: #155724; }
-        .bet-row.paired { border-left-color: #ff9800; background: #fff8e1; }
-        .bet-row.paired.correct { border-left-color: #28a745; background: #e8f5e9; }
-        .bet-row.draw { border-left-color: #6c757d; background: #f8f9fa; }
+        button { 
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white; 
+            border: none; 
+            padding: 12px 20px; 
+            cursor: pointer; 
+            border-radius: 6px; 
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        button:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(0, 123, 255, 0.3); }
+        button.settle-btn { 
+            background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+            color: #212529;
+        }
+        button.settle-btn:hover { box-shadow: 0 6px 20px rgba(255, 193, 7, 0.3); }
+        input, select { 
+            padding: 10px 12px; 
+            border: 2px solid #ddd; 
+            border-radius: 6px;
+            font-size: 0.95em;
+            transition: border-color 0.3s ease;
+        }
+        input:focus, select:focus { 
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
+        }
+        .leaderboard-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .leaderboard-table th, .leaderboard-table td { 
+            padding: 12px; 
+            text-align: left; 
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .leaderboard-table th { 
+            background: linear-gradient(135deg, #f1f3f5 0%, #e9ecef 100%);
+            font-weight: bold;
+            color: #495057;
+        }
+        .leaderboard-table tr:hover { background: #f8f9fa; }
+        .badge { 
+            display: inline-block; 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 0.85em; 
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .badge.upcoming { 
+            background: linear-gradient(135deg, #ffeeba 0%, #ffe69c 100%);
+            color: #856404;
+        }
+        .badge.completed { 
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            color: #155724;
+        }
+        h3 { color: #1a2a6c; margin-bottom: 15px; font-size: 1.3em; }
+        .match-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .match-header h3 { margin: 0; }
+        .admin-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin-top: 15px;
+        }
+        .section-title { font-size: 0.9em; color: #666; margin-bottom: 10px; font-weight: 600; }
+        .bet-row span { display: flex; align-items: center; gap: 8px; }
     </style>
 </head>
 <body>
@@ -53,7 +156,7 @@
                             </div>
                         </form>
                     </div>
-                    <p id="matchAccessNotice" class="hidden" style="color:#666; margin:0;">Only admins can add matches and finalize results.</p>
+                    <p id="matchAccessNotice" class="hidden" style="color:#666; margin:0; font-size:0.9em;">📋 Only admins can add matches and finalize results.</p>
                 </div>
 
                 <h3>📅 Match Records & Activity</h3>
@@ -63,12 +166,12 @@
             <div>
                 <div class="card">
                     <h3>🥇 Leaderboard</h3>
-                    <p style="font-size: 0.9em; color: #666;">Ranked by total correct incorrect predicts</p>
+                    <p style="font-size: 0.9em; color: #666;">Ranked by correct predictions</p>
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
                                 <th>Predictor Name</th>
-                                <th>Correct</th>
+                                <th>Score</th>
                             </tr>
                         </thead>
                         <tbody id="leaderboardBody">
@@ -202,12 +305,19 @@
             return;
         }
 
-        tbody.innerHTML = sortedEntries.map(([name, score]) => `
-            <tr>
-                <td><b>${escapeHtml(name)}</b></td>
-                <td><span style="color:#28a745; font-weight:bold;">🏆 ${score}</span></td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = sortedEntries.map(([name, score], index) => {
+            let medal = '🏅';
+            if (index === 0) medal = '🥇';
+            else if (index === 1) medal = '🥈';
+            else if (index === 2) medal = '🥉';
+
+            return `
+                <tr>
+                    <td><b>${medal} ${escapeHtml(name)}</b></td>
+                    <td><span style="color:#28a745; font-weight:bold;">${score > 0 ? '+' : ''}${score}</span></td>
+                </tr>
+            `;
+        }).join('');
     }
 
     function renderMatches(matches, role = 'user') {
@@ -215,7 +325,14 @@
         container.innerHTML = '';
         const isAdminUser = role === 'admin';
 
-        matches.forEach(match => {
+        // Sort matches by date descending (newest first)
+        const sortedMatches = [...matches].sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            return dateB - dateA;
+        });
+
+        sortedMatches.forEach(match => {
             const isSettled = !!match.winner;
             
             // Auto-balance choice dropdown
@@ -247,7 +364,7 @@
                 }
 
                 const pairLabel = b.pair_order ? `Pair ${escapeHtml(b.pair_order)}` : 'Paired';
-                const pairedBadge = isPaired ? `<span class="badge" style="background:#fff3cd;color:#856404; margin-left:8px;">${pairLabel}</span>` : '';
+                const pairedBadge = isPaired ? `<span class="badge" style="background:linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); color:#856404; margin-left:8px;">${pairLabel}</span>` : '';
 
                 return `
                     <div class="bet-row ${statusClass}">
@@ -274,39 +391,42 @@
 
                 if (isAdminUser) {
                     settleWidget = `
-                        <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
+                        <div class="admin-section">
+                            <div class="section-title">👥 Add Prediction</div>
                             ${predictionWidget}
-                            <div style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;" class="flex-inputs">
+                            <div style="margin-top: 15px; border-top: 2px dashed #ccc; padding-top: 15px;" class="flex-inputs">
+                                <div class="section-title" style="width: 100%; margin: 0 0 10px 0;">🔒 Admin: Set Final Result</div>
                                 <select id="winner_${match.id}">
                                     <option value="Draw">Draw</option>
                                     <option value="${escapeHtml(match.team1)}">${escapeHtml(match.team1)}</option>
                                     <option value="${escapeHtml(match.team2)}">${escapeHtml(match.team2)}</option>
                                 </select>
-                                <button class="settle-btn" onclick="settleMatch(${match.id})">🔒 Set Final Match Result</button>
+                                <button class="settle-btn" onclick="settleMatch(${match.id})">🔒 Finalize Result</button>
                             </div>
                         </div>
                     `;
                 } else {
                     settleWidget = `
-                        <div style="margin-top:15px; background:#f1f3f5; padding:12px; border-radius:6px;">
+                        <div class="admin-section">
+                            <div class="section-title">👥 Add Prediction</div>
                             ${predictionWidget}
-                            <p style="margin-top:10px; color:#666;">Only admins can finalize match results.</p>
+                            <p style="margin-top:10px; color:#666; font-size:0.9em;">ℹ️ Only admins can finalize match results.</p>
                         </div>
                     `;
                 }
             } else {
                 settleWidget = `
-                    <p style="margin-top:10px; color:#28a745; font-weight:bold;">🌟 Winner Confirmed: ${escapeHtml(match.winner)}</p>
+                    <p style="margin-top:15px; color:#28a745; font-weight:bold; font-size:1.1em;">🌟 Winner Confirmed: <span style="color: #1a2a6c;">${escapeHtml(match.winner)}</span></p>
                 `;
             }
 
             container.innerHTML += `
                 <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3>📅 ${match.date} — ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}</h3>
-                        <span class="badge ${isSettled ? 'completed' : 'upcoming'}">${isSettled ? 'Finished' : 'Upcoming'}</span>
+                    <div class="match-header">
+                        <h3>⚽ ${match.date} — ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}</h3>
+                        <span class="badge ${isSettled ? 'completed' : 'upcoming'}">${isSettled ? '✅ Finished' : '⏳ Upcoming'}</span>
                     </div>
-                    <div>${betsHtml || '<p style="color:#888; font-style:italic;">No logged predicts yet.</p>'}</div>
+                    <div>${betsHtml || '<p style="color:#999; font-style:italic; text-align: center; padding: 20px;">📝 No logged predictions yet.</p>'}</div>
                     ${settleWidget}
                 </div>
             `;
@@ -330,7 +450,7 @@
     }
 
     async function settleMatch(matchId) {
-        const winningTeam = document.getElementById(`winner_${match.id}`).value;
+        const winningTeam = document.getElementById(`winner_${matchId}`).value;
         if(!confirm(`Are you sure ${winningTeam} won? This will lock the match and calculate user scores.`)) return;
 
         const db = await getDB();
