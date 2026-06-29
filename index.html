@@ -59,6 +59,8 @@
         .bet-row.draw { border-left-color: #6c757d; background: linear-gradient(to right, #f0f0f0, white); }
         .bet-row.paired { border-left-color: #ff9800; background: linear-gradient(to right, #fff8e1, white); }
         .bet-row.paired.correct { border-left-color: #28a745; background: linear-gradient(to right, #e8f5e9, white); }
+        .pair-group { margin: 15px 0; padding: 10px; background: #fafafa; border-radius: 8px; border: 1px solid #f0f0f0; }
+        .pair-group-label { font-size: 0.9em; color: #666; font-weight: 600; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #ff9800; }
         .hidden { display: none !important; }
         button { 
             background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
@@ -217,6 +219,8 @@
                 padding: 10px; 
                 font-size: 0.9em;
             }
+            .pair-group { margin: 12px 0; padding: 8px; }
+            .pair-group-label { font-size: 0.85em; margin-bottom: 8px; }
         }
 
         /* ===== SMALL PHONES (< 480px) ===== */
@@ -283,6 +287,8 @@
                 padding: 8px; 
                 font-size: 0.85em;
             }
+            .pair-group { margin: 10px 0; padding: 6px; }
+            .pair-group-label { font-size: 0.8em; margin-bottom: 6px; }
         }
 
         /* ===== ULTRA SMALL (< 360px) ===== */
@@ -293,6 +299,8 @@
             .card { padding: 10px; margin-bottom: 6px; }
             h3 { font-size: 0.9em; }
             .badge { font-size: 0.7em; padding: 3px 6px; }
+            .pair-group { margin: 8px 0; padding: 4px; }
+            .pair-group-label { font-size: 0.75em; }
         }
 
         /* ===== LANDSCAPE MODE ===== */
@@ -302,6 +310,7 @@
             .card { padding: 12px; }
             .flex-inputs { gap: 8px; }
             .bet-row { padding: 8px; margin: 4px 0; }
+            .pair-group { margin: 8px 0; padding: 6px; }
         }
     </style>
 </head>
@@ -511,18 +520,74 @@
             const t2Count = match.bets.filter(b => b.picked_side === match.team2).length;
             const defaultSide = t1Count <= t2Count ? match.team1 : match.team2;
 
-            let betsHtml = match.bets.map(b => {
-                const isPaired = isPairedPrediction(match, b);
-                let statusClass = isPaired ? 'paired' : '';
+            // Group bets by pair_order and render them together
+            const pairGroups = {};
+            const unpaired = [];
+
+            match.bets.forEach(b => {
+                const pairOrder = String(b.pair_order || '').trim();
+                if (pairOrder) {
+                    if (!pairGroups[pairOrder]) pairGroups[pairOrder] = [];
+                    pairGroups[pairOrder].push(b);
+                } else {
+                    unpaired.push(b);
+                }
+            });
+
+            // Sort pair groups by numeric order
+            const sortedPairOrders = Object.keys(pairGroups)
+                .sort((a, b) => parseInt(a) - parseInt(b));
+
+            let betsHtml = '';
+
+            // Render paired predictions first, grouped together
+            sortedPairOrders.forEach(pairOrder => {
+                const bets = pairGroups[pairOrder];
+                betsHtml += `<div class="pair-group"><div class="pair-group-label">🔗 Pair ${escapeHtml(pairOrder)}</div>`;
+                
+                bets.forEach(b => {
+                    const isPaired = isPairedPrediction(match, b);
+                    let statusClass = isPaired ? 'paired' : '';
+                    let verificationText = '';
+
+                    if (isSettled) {
+                        if (match.winner === 'Draw') {
+                            statusClass = 'draw';
+                            verificationText = ' ↔ Draw';
+                        } else if (isPaired && b.picked_side === match.winner) {
+                            statusClass = 'paired correct';
+                            verificationText = ' ✅ Correct + Paired';
+                        } else if (b.picked_side === match.winner) {
+                            statusClass = 'incorrect';
+                            verificationText = ' ⚠️ Correct team, but not paired';
+                        } else {
+                            statusClass = 'incorrect';
+                            verificationText = ' ❌ Incorrect';
+                        }
+                    } else if (isPaired) {
+                        verificationText = ' 🔗 Paired';
+                    }
+
+                    betsHtml += `
+                        <div class="bet-row ${statusClass}">
+                            <span>🙋‍♂️ <b>${escapeHtml(b.bettor_name)}</b></span>
+                            <span>Predict: <b>${escapeHtml(b.picked_side)}</b>${verificationText}</span>
+                        </div>
+                    `;
+                });
+                
+                betsHtml += '</div>';
+            });
+
+            // Render unpaired predictions
+            unpaired.forEach(b => {
+                let statusClass = '';
                 let verificationText = '';
 
                 if (isSettled) {
                     if (match.winner === 'Draw') {
                         statusClass = 'draw';
                         verificationText = ' ↔ Draw';
-                    } else if (isPaired && b.picked_side === match.winner) {
-                        statusClass = 'paired correct';
-                        verificationText = ' ✅ Correct + Paired';
                     } else if (b.picked_side === match.winner) {
                         statusClass = 'incorrect';
                         verificationText = ' ⚠️ Correct team, but not paired';
@@ -530,20 +595,15 @@
                         statusClass = 'incorrect';
                         verificationText = ' ❌ Incorrect';
                     }
-                } else if (isPaired) {
-                    verificationText = ' 🔗 Paired';
                 }
 
-                const pairLabel = b.pair_order ? `Pair ${escapeHtml(b.pair_order)}` : 'Paired';
-                const pairedBadge = isPaired ? `<span class="badge" style="background:linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); color:#856404; margin-left:8px;">${pairLabel}</span>` : '';
-
-                return `
+                betsHtml += `
                     <div class="bet-row ${statusClass}">
-                        <span>🙋‍♂️ <b>${escapeHtml(b.bettor_name)}</b>${pairedBadge}</span>
+                        <span>🙋‍♂️ <b>${escapeHtml(b.bettor_name)}</b></span>
                         <span>Predict: <b>${escapeHtml(b.picked_side)}</b>${verificationText}</span>
                     </div>
                 `;
-            }).join('');
+            });
 
             // Build match closing action UI block
             let settleWidget = '';
