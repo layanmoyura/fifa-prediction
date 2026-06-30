@@ -505,11 +505,19 @@
         container.innerHTML = '';
         const isAdminUser = role === 'admin';
 
-        // Sort matches by date descending (newest first)
+        // Sort matches by date descending (newest first), then by status (upcoming before completed)
         const sortedMatches = [...matches].sort((a, b) => {
             const dateA = new Date(a.date);
             const dateB = new Date(b.date);
-            return dateB - dateA;
+            const dateDiff = dateB - dateA;
+            
+            // If dates are different, sort by date
+            if (dateDiff !== 0) return dateDiff;
+            
+            // If same date, upcoming (no winner) comes before completed (has winner)
+            const aIsSettled = !!a.winner;
+            const bIsSettled = !!b.winner;
+            return aIsSettled - bIsSettled;
         });
 
         sortedMatches.forEach(match => {
