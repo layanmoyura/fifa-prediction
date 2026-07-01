@@ -123,6 +123,11 @@
             background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
             color: #155724;
         }
+        .badge.odds {
+            background: linear-gradient(135deg, #e7d4f5 0%, #d4b5e8 100%);
+            color: #553399;
+            font-size: 0.8em;
+        }
         h3 { color: #1a2a6c; margin-bottom: 12px; font-size: 1.1em; }
         .match-header { 
             display: flex; 
@@ -144,6 +149,16 @@
         }
         .section-title { font-size: 0.9em; color: #666; margin-bottom: 10px; font-weight: 600; }
         .bet-row span { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .odds-label { 
+            display: inline-block;
+            background: #e7d4f5;
+            color: #553399;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 5px;
+        }
 
         /* ===== TABLET & MEDIUM DEVICES (768px - 1024px) ===== */
         @media (max-width: 1024px) {
@@ -332,6 +347,7 @@
                                 <input type="date" id="mDate" required>
                                 <input type="text" id="t1" placeholder="Team 1" required>
                                 <input type="text" id="t2" placeholder="Team 2" required>
+                                <input type="number" id="odds" placeholder="Odds/Multiplier (default: 1)" min="0.1" step="0.1" value="1">
                                 <button type="submit">Create Match</button>
                             </div>
                         </form>
@@ -453,17 +469,18 @@
 
         matches.forEach(match => {
             if (match.winner && match.winner !== 'Draw') { // Only score non-draw matches that are completed
+                const multiplier = match.odds || 1;
                 match.bets.forEach(bet => {
                     if (!scores[bet.bettor_name]) scores[bet.bettor_name] = 0;
 
                     const isPaired = isPairedPrediction(match, bet);
 
-                    // New behavior: paired correct => +1, paired incorrect => -1
+                    // New behavior: paired correct => +multiplier, paired incorrect => -multiplier
                     if (isPaired) {
                         if (bet.picked_side === match.winner) {
-                            scores[bet.bettor_name] += 1;
+                            scores[bet.bettor_name] += multiplier;
                         } else {
-                            scores[bet.bettor_name] -= 1;
+                            scores[bet.bettor_name] -= multiplier;
                         }
                     }
                     // Unpaired predictions do not affect score (kept as before)
@@ -522,6 +539,7 @@
 
         sortedMatches.forEach(match => {
             const isSettled = !!match.winner;
+            const multiplier = match.odds || 1;
             
             // Auto-balance choice dropdown
             const t1Count = match.bets.filter(b => b.picked_side === match.team1).length;
@@ -564,7 +582,7 @@
                             verificationText = ' ↔ Draw';
                         } else if (isPaired && b.picked_side === match.winner) {
                             statusClass = 'paired correct';
-                            verificationText = ' ✅ Correct + Paired';
+                            verificationText = ` ✅ Correct + Paired${multiplier !== 1 ? ` (${multiplier > 0 ? '+' : ''}${multiplier})` : ''}`;
                         } else if (b.picked_side === match.winner) {
                             statusClass = 'incorrect';
                             verificationText = ' ⚠️ Correct team, but not paired';
@@ -659,11 +677,16 @@
                 `;
             }
 
+            const oddsDisplay = multiplier !== 1 ? `<span class="badge odds">📊 ${multiplier}x</span>` : '';
+
             container.innerHTML += `
                 <div class="card">
                     <div class="match-header">
                         <h3>⚽ ${match.date} — ${escapeHtml(match.team1)} vs ${escapeHtml(match.team2)}</h3>
-                        <span class="badge ${isSettled ? 'completed' : 'upcoming'}">${isSettled ? '✅ Finished' : '⏳ Upcoming'}</span>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            ${oddsDisplay}
+                            <span class="badge ${isSettled ? 'completed' : 'upcoming'}">${isSettled ? '✅ Finished' : '⏳ Upcoming'}</span>
+                        </div>
                     </div>
                     <div>${betsHtml || '<p style="color:#999; font-style:italic; text-align: center; padding: 15px;">📝 No logged predictions yet.</p>'}</div>
                     ${settleWidget}
@@ -715,16 +738,20 @@
         }
         if(!db.matches) db.matches = [];
 
+        const oddsValue = parseFloat(document.getElementById('odds').value) || 1;
+
         db.matches.push({
             id: Date.now(),
             date: document.getElementById('mDate').value,
             team1: document.getElementById('t1').value,
             team2: document.getElementById('t2').value,
+            odds: oddsValue,
             bets: []
         });
 
         await saveDB(db);
         document.getElementById('matchForm').reset();
+        document.getElementById('odds').value = '1';
         fetchData();
     });
 
