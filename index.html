@@ -347,7 +347,7 @@
                                 <input type="date" id="mDate" required>
                                 <input type="text" id="t1" placeholder="Team 1" required>
                                 <input type="text" id="t2" placeholder="Team 2" required>
-                                <input type="number" id="odds" placeholder="Odds/Multiplier (default: 1)" min="0.1" step="0.1" value="1">
+                                <input type="number" id="odds" placeholder="Odds Multiplier (default: 1)" min="1" step="1" value="1">
                                 <button type="submit">Create Match</button>
                             </div>
                         </form>
@@ -469,7 +469,7 @@
 
         matches.forEach(match => {
             if (match.winner && match.winner !== 'Draw') { // Only score non-draw matches that are completed
-                const multiplier = match.odds || 1;
+                const multiplier = parseInt(match.odds) || 1;
                 match.bets.forEach(bet => {
                     if (!scores[bet.bettor_name]) scores[bet.bettor_name] = 0;
 
@@ -539,7 +539,7 @@
 
         sortedMatches.forEach(match => {
             const isSettled = !!match.winner;
-            const multiplier = match.odds || 1;
+            const multiplier = parseInt(match.odds) || 1;
             
             // Auto-balance choice dropdown
             const t1Count = match.bets.filter(b => b.picked_side === match.team1).length;
@@ -582,7 +582,7 @@
                             verificationText = ' ↔ Draw';
                         } else if (isPaired && b.picked_side === match.winner) {
                             statusClass = 'paired correct';
-                            verificationText = ` ✅ Correct + Paired${multiplier !== 1 ? ` (${multiplier > 0 ? '+' : ''}${multiplier})` : ''}`;
+                            verificationText = ` ✅ Correct + Paired${multiplier !== 1 ? ` (+${multiplier})` : ''}`;
                         } else if (b.picked_side === match.winner) {
                             statusClass = 'incorrect';
                             verificationText = ' ⚠️ Correct team, but not paired';
@@ -738,7 +738,7 @@
         }
         if(!db.matches) db.matches = [];
 
-        const oddsValue = parseFloat(document.getElementById('odds').value) || 1;
+        const oddsValue = parseInt(document.getElementById('odds').value) || 1;
 
         db.matches.push({
             id: Date.now(),
