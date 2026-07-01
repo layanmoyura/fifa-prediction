@@ -80,6 +80,13 @@
             color: #212529;
         }
         button.settle-btn:hover { box-shadow: 0 6px 20px rgba(255, 193, 7, 0.3); }
+        button.update-odds-btn {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+            padding: 9px 14px;
+            font-size: 0.9em;
+        }
+        button.update-odds-btn:hover { box-shadow: 0 6px 20px rgba(23, 162, 184, 0.3); }
         input, select { 
             padding: 10px 12px; 
             border: 2px solid #ddd; 
@@ -149,15 +156,27 @@
         }
         .section-title { font-size: 0.9em; color: #666; margin-bottom: 10px; font-weight: 600; }
         .bet-row span { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .odds-label { 
-            display: inline-block;
-            background: #e7d4f5;
-            color: #553399;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
+        .odds-update-section {
+            background: linear-gradient(135deg, #e8f4f8 0%, #d4ecf5 100%);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #17a2b8;
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .odds-update-section input {
+            flex: 1;
+            min-width: 80px;
+        }
+        .odds-update-section label {
+            display: block;
+            font-size: 0.9em;
+            color: #17a2b8;
             font-weight: 600;
-            margin-left: 5px;
+            width: 100%;
         }
 
         /* ===== TABLET & MEDIUM DEVICES (768px - 1024px) ===== */
@@ -236,6 +255,13 @@
             }
             .pair-group { margin: 12px 0; padding: 8px; }
             .pair-group-label { font-size: 0.85em; margin-bottom: 8px; }
+            .odds-update-section {
+                flex-direction: column;
+            }
+            .odds-update-section input,
+            .odds-update-section button {
+                width: 100%;
+            }
         }
 
         /* ===== SMALL PHONES (< 480px) ===== */
@@ -304,6 +330,14 @@
             }
             .pair-group { margin: 10px 0; padding: 6px; }
             .pair-group-label { font-size: 0.8em; margin-bottom: 6px; }
+            .odds-update-section {
+                flex-direction: column;
+                padding: 8px;
+            }
+            .odds-update-section input,
+            .odds-update-section button {
+                width: 100%;
+            }
         }
 
         /* ===== ULTRA SMALL (< 360px) ===== */
@@ -672,8 +706,21 @@
                     `;
                 }
             } else {
+                // For settled matches, show update odds option only to admins
+                let updateOddsWidget = '';
+                if (isAdminUser) {
+                    updateOddsWidget = `
+                        <div class="odds-update-section">
+                            <label style="width: 100%;">📊 Update Multiplier</label>
+                            <input type="number" id="new_odds_${match.id}" placeholder="New odds multiplier" min="1" step="1" value="${multiplier}">
+                            <button class="update-odds-btn" onclick="updateMatchOdds(${match.id})">✏️ Update</button>
+                        </div>
+                    `;
+                }
+
                 settleWidget = `
                     <p style="margin-top:12px; color:#28a745; font-weight:bold; font-size:1em;">🌟 Winner Confirmed: <span style="color: #1a2a6c;">${escapeHtml(match.winner)}</span></p>
+                    ${updateOddsWidget}
                 `;
             }
 
@@ -724,6 +771,29 @@
         const match = db.matches.find(m => m.id === matchId);
         if (match) {
             match.winner = winningTeam;
+            await saveDB(db);
+            fetchData();
+        }
+    }
+
+    async function updateMatchOdds(matchId) {
+        const newOdds = parseInt(document.getElementById(`new_odds_${matchId}`).value);
+        if (!newOdds || newOdds < 1) {
+            alert("Please enter a valid multiplier (must be at least 1).");
+            return;
+        }
+
+        if (!confirm(`Update multiplier to ${newOdds}x? This will recalculate the leaderboard scores.`)) return;
+
+        const db = await getDB();
+        if (!isAdmin(currentEmail, db)) {
+            alert("Only admins can update odds.");
+            return;
+        }
+
+        const match = db.matches.find(m => m.id === matchId);
+        if (match) {
+            match.odds = newOdds;
             await saveDB(db);
             fetchData();
         }
